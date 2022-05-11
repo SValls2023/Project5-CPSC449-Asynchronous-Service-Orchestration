@@ -7,8 +7,8 @@ Create folder called Shards before executing create_shards.py
 Create shards: execute create_shards.py in the terminal
 ### Starting services:
 #### Standalone:
-uvicorn api_dict:app --reload
-uvicorn api_game:app --reload
-uvicorn api_stats:app --reload
+- uvicorn api_dict:app --reload
+- uvicorn api_game:app --reload
+- uvicorn api_stats:app --reload
 #### Using Procfile:
 foreman start
