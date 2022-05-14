@@ -27,19 +27,19 @@ track = FastAPI()
 @track.post("/new_game", status_code=status.HTTP_201_CREATED)
 async def new_game(sess:Session, response: Response):
     # Make sure user exists
-    con = sqlite3.connect('./database/users.db')
-    cursor = con.cursor()
-    try:
-        result = cursor.execute("SELECT * FROM users WHERE user_id = ?",
-        	[sess.user_id.bytes_le]).fetchall()
-        if len(result) == 0:
-            con.close()
-            raise HTTPException
-    except:
-        con.close()
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Invalid user"
-        )
+    #con = sqlite3.connect('./database/users.db')
+    #cursor = con.cursor()
+    #try:
+    #    result = cursor.execute("SELECT * FROM users WHERE user_id = ?",
+    #    	[sess.user_id.bytes_le]).fetchall()
+    #    if len(result) == 0:
+    #        con.close()
+    #        raise HTTPException
+    #except:
+    #    con.close()
+    #    raise HTTPException(
+    #        status_code=status.HTTP_404_NOT_FOUND, detail="Invalid user"
+    #    )
   
     con = sqlite3.connect(f'./database/games{(sess.user_id.int % 3) + 1}.db')
     cursor = con.cursor()
