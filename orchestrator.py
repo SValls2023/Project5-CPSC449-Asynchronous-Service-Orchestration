@@ -13,9 +13,7 @@ main = FastAPI()
 # Query users db and look for user id(uuid)
 # If it exists, choose a new game_id that user hasn't played
 # Else: generate new user, and choose a new game_id
-# Also add new username to users table from the users db and games table from the games db
-# !!!!!!!!!!!!Fix game_id timestamp across microservices (using game date instead)!!!!!!!!!!!!!!!!
-# !!!!!!!!!!!!!!!!!!Post username to db!!!!!!!!!!!!!!!!!!!!!
+# TO DO: !!!!!!!!!!!!!!!!!!Post username to db!!!!!!!!!!!!!!!!!!!!!
 @main.post("/game/new", status_code=status.HTTP_200_OK)
 async def check_user(username: str, response: Response):
     # Checks if user is in db
