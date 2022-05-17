@@ -74,7 +74,22 @@ async def new_game(sess:Session, response: Response):
 # For a new guess, record the guess and update the number of guesses remaining
 # Output an error if the number of guesses exceeds 6
 @track.post("/update_game", status_code=status.HTTP_200_OK)
-async def update_game(unique_id: UUID, input_word: str, response: Response):
+async def update_game(user_id: int, input_word: str, response: Response):
+    # Make sure user exists
+    con = sqlite3.connect('./DB/Shards/user_profiles.db')
+    cursor = con.cursor()
+    try:
+        unique_id = cursor.execute("SELECT unique_id FROM users WHERE user_id = ?",
+        	[user_id]).fetchone()[0]
+        if len(unique_id) == 0:
+            con.close()
+            raise HTTPException
+    except:
+        con.close()
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Invalid user"
+        )
+    unique_id = str(unique_id)
     guess_word = input_word.lower()
     r = redis.Redis(decode_responses=True)
     user_guess_info = r.lrange(unique_id, 0, -1)
@@ -91,14 +106,14 @@ async def update_game(unique_id: UUID, input_word: str, response: Response):
 # Input: new guess from the user
 # Output: Return information about the current game state of the user
 @track.post("/restore_game", status_code=status.HTTP_200_OK)
-async def update_game(unique_id: bytes, response: Response):
+async def update_game(user_id: int, response: Response):
     # Make sure user exists
     con = sqlite3.connect('./DB/Shards/user_profiles.db')
     cursor = con.cursor()
     try:
-        result = cursor.execute("SELECT * FROM users WHERE unique_id = ?",
-        	[unique_id]).fetchall()
-        if len(result) == 0:
+        unique_id = cursor.execute("SELECT unique_id FROM users WHERE user_id = ?",
+        	[user_id]).fetchone()[0]
+        if len(unique_id) == 0:
             con.close()
             raise HTTPException
     except:
@@ -106,7 +121,7 @@ async def update_game(unique_id: bytes, response: Response):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Invalid user"
         )
-    unique_id = unique_id
+    unique_id = str(unique_id)
     r = redis.Redis(decode_responses=True)
     user_guess_info = r.lrange(unique_id, 0, -1)
     print(user_guess_info)
