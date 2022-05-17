@@ -7,6 +7,7 @@
 import asyncio
 import json
 import httpx
+import sqlite3
 from uuid import UUID, uuid4
 from fastapi import FastAPI, Depends, Response, HTTPException, status, Request
 from datetime import datetime
@@ -19,18 +20,18 @@ def new_game(username: str):
         # Part 1: Check the username from user_profiles db
         con = sqlite3.connect('./DB/Shards/user_profiles.db')
         cur = con.cursor()
-        # If username does not exist, commit to users table
-        # Else: Retrieve user_id and unique_id for existing user
-        user_id = uuid4()
-        curr_row = 0
+
+        # Creates new id for the new user and commits to the users table
+        user_id = cur.execute("SELECT unique_id FROM users WHERE username = ?", [username]).fetchall()
+        curr_row = cur.execute("SELECT MAX(user_id) FROM users").fetchall()
         try:
-            user_id = cur.execute("SELECT unique_id FROM users WHERE username = ?", [username]).fetchone()[0]
-            curr_row = cur.execute("SELECT MAX(user_id) FROM users").fetchone()[0]
-            # Creates new id for the new user and commits to the users table
             if len(user_id) == 0:
-                curr_row += 1
+                curr_row = curr_row[0][0]; curr_row += 1
                 user_id = uuid4()
-                cur.execute("INSERT INTO users VALUES (?,?)", [curr_row, username, user_id.bytes_le])
+                cur.execute("INSERT INTO users VALUES (?,?)", [curr_row, username, user_id])
+            else:
+                user_id = user_id[0][0]
+                curr_row = curr_row[0][0]
             con.commit()
             con.close()
         except:
@@ -40,7 +41,7 @@ def new_game(username: str):
             )
          
         # Initialize Json game object  
-        # Move status key into tracking microservice       
+        # Move status key into tracking microservice      
         curr = {"username": username, "status": "new", "unique_id":user_id}   
         d = datetime.now(); time = f"{d.year}{d.month}{d.day}"
         game_id = int(time)
@@ -52,10 +53,10 @@ def new_game(username: str):
         curr.update(dict(r.json()))
         
         # Replace with update game from track
-        data = dict(r.json())
-        if int(data["counter"]) > 0:
-            curr["status"] = "In-progress"
-            curr.update(data)
+        #data = dict(r.json())
+        #if int(data["counter"]) > 0:
+        #    curr["status"] = "In-progress"
+        #    curr.update(data)
         # Add condition that raises exception when more than 6 guesses is passed
        
         # Try getting restore game data and posting in return statement
