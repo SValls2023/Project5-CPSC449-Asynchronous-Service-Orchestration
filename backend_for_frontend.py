@@ -13,7 +13,8 @@ from fastapi import FastAPI, Depends, Response, HTTPException, status, Request
 from datetime import datetime
 app = FastAPI()
 
-# REPLACE USER_ID WITH UNIQUE_ID not for string tho
+# user_id is the unique_id (byte formar)
+# curr_row is the row_id
 @app.post("/game/new", status_code=status.HTTP_201_CREATED)
 def new_game(username: str):
     with httpx.Client() as client:
