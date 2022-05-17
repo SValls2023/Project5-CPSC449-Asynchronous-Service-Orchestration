@@ -14,12 +14,17 @@ import asyncio
 import redis
 
 class Session(BaseModel):
-    user_id: UUID
+    user_id: int
     game_id: int
 
 
 # track_cli = Redis()
 track = FastAPI()
+
+# Sample UUIDs for testing
+#c97f5995-0551-40d4-85e2-4f6313385e44  user_id = 99998  username = donald64
+#e1345bbb-ae9c-42a1-bc7a-273913552f7d  user_id = 99999  username = terrylarry
+#fea11f5d-02b4-4dc9-a0ba-619990486cba  user_id = 100000 username = christina22
 
 
 # Input: User ID, Game ID
@@ -27,12 +32,13 @@ track = FastAPI()
 @track.post("/new_game", status_code=status.HTTP_201_CREATED)
 async def new_game(sess:Session, response: Response):
     # Make sure user exists
+    # TO DO: Correct hashing scheme for shards
     con = sqlite3.connect('./DB/Shards/user_profiles.db')
     cursor = con.cursor()
     try:
-        result = cursor.execute("SELECT * FROM users WHERE unique_id = ?",
-        	[sess.user_id.bytes_le]).fetchall()
-        if len(result) == 0:
+        unique_id = cursor.execute("SELECT unique_id FROM users WHERE user_id = ?",
+        	[sess.user_id]).fetchone()[0]
+        if len(unique_id) == 0:
             con.close()
             raise HTTPException
     except:
@@ -41,42 +47,43 @@ async def new_game(sess:Session, response: Response):
             status_code=status.HTTP_404_NOT_FOUND, detail="Invalid user"
         )
 
-    con = sqlite3.connect(f'./DB/Shards/stats{(sess.user_id.int % 3) + 1}.db')
+    con = sqlite3.connect(f'./DB/Shards/stats{(sess.user_id % 3) + 1}.db')
     cursor = con.cursor()
     try:
-        game = cursor.execute("SELECT * FROM games WHERE unique_id = ? and game_id = ?", [sess.user_id.bytes_le,sess.game_id]).fetchall()
+        game = cursor.execute("SELECT * FROM games WHERE user_id = ? AND game_id = ?", [sess.user_id,sess.game_id]).fetchall()
         if len(game) != 0:
             con.close()
             raise HTTPException
+        con.close()
     except:
         con.close()
         raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="You already played this game!"
             )
     r = redis.Redis(decode_responses=True)
-    user_id = sess.user_id.bytes_le
-    r.delete(user_id)
-    r.rpush(user_id, sess.game_id)
-    r.rpush(user_id, 0)
-    response.headers["Location"] = f"/restore_game?unique_id={sess.user_id}"
-    return {"unique_id": sess.user_id, "game_id": sess.game_id, "guesses" : 0}
+    unique_id = str(unique_id)
+    r.delete(unique_id)
+    r.rpush(unique_id, sess.game_id)
+    r.rpush(unique_id, 0)
+    response.headers["Location"] = f"/restore_game?unique_id={unique_id}"
+    # Modify this to return json format from the project 5 example
+    return {"unique_id": unique_id, "game_id": sess.game_id, "guesses" : 0}
 
 
-# Input: user_id and new guess word
+# Input: uniquw_id and new guess word
 # For a new guess, record the guess and update the number of guesses remaining
 # Output an error if the number of guesses exceeds 6
 @track.post("/update_game", status_code=status.HTTP_200_OK)
-async def update_game(user_id: UUID, input_word: str, response: Response):
+async def update_game(unique_id: UUID, input_word: str, response: Response):
     guess_word = input_word.lower()
-    user_id = user_id.bytes_le
     r = redis.Redis(decode_responses=True)
-    user_guess_info = r.lrange(user_id, 0, -1)
+    user_guess_info = r.lrange(unique_id, 0, -1)
     if len(user_guess_info) > 7:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="No more! You reached your 6 allowed guesses."
         )
-    r.rpush(user_id, input_word)
-    r.lset(user_id, 1, int(user_guess_info[1])+1)
+    r.rpush(unique_id, input_word)
+    r.lset(unique_id, 1, int(user_guess_info[1])+1)
     return {"input": guess_word}
 
 
@@ -84,13 +91,13 @@ async def update_game(user_id: UUID, input_word: str, response: Response):
 # Input: new guess from the user
 # Output: Return information about the current game state of the user
 @track.post("/restore_game", status_code=status.HTTP_200_OK)
-async def update_game(user_id: UUID, response: Response):
+async def update_game(unique_id: bytes, response: Response):
     # Make sure user exists
     con = sqlite3.connect('./DB/Shards/user_profiles.db')
     cursor = con.cursor()
     try:
         result = cursor.execute("SELECT * FROM users WHERE unique_id = ?",
-        	[user_id.bytes_le]).fetchall()
+        	[unique_id]).fetchall()
         if len(result) == 0:
             con.close()
             raise HTTPException
@@ -99,9 +106,9 @@ async def update_game(user_id: UUID, response: Response):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Invalid user"
         )
-    user_id = user_id.bytes_le
+    unique_id = unique_id
     r = redis.Redis(decode_responses=True)
-    user_guess_info = r.lrange(user_id, 0, -1)
+    user_guess_info = r.lrange(unique_id, 0, -1)
     print(user_guess_info)
     if len(user_guess_info) == 0:
         raise HTTPException(
