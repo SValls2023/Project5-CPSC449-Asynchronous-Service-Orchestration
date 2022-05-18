@@ -13,9 +13,9 @@ import asyncio
 #import aioredis
 import redis
 
-class Session(BaseModel):
-    user_id: int
-    game_id: int
+#class Session(BaseModel):
+#    user_id: int
+#    game_id: int
 
 
 # track_cli = Redis()
@@ -30,14 +30,14 @@ track = FastAPI()
 # Input: User ID, Game ID
 # Output: Indicate a succesful response, or an error as the user already exists
 @track.post("/new_game", status_code=status.HTTP_201_CREATED)
-async def new_game(sess:Session, response: Response):
+async def new_game(user_id: int, game_id: int, response: Response):
     # Make sure user exists
     # TO DO: Correct hashing scheme for shards
     con = sqlite3.connect('./DB/Shards/user_profiles.db')
     cursor = con.cursor()
     try:
         unique_id = cursor.execute("SELECT unique_id FROM users WHERE user_id = ?",
-        	[sess.user_id]).fetchone()[0]
+        	[user_id]).fetchone()[0]
         if len(unique_id) == 0:
             con.close()
             raise HTTPException
@@ -47,10 +47,10 @@ async def new_game(sess:Session, response: Response):
             status_code=status.HTTP_404_NOT_FOUND, detail="Invalid user"
         )
 
-    con = sqlite3.connect(f'./DB/Shards/stats{(sess.user_id % 3) + 1}.db')
+    con = sqlite3.connect(f'./DB/Shards/stats{(user_id % 3) + 1}.db')
     cursor = con.cursor()
     try:
-        game = cursor.execute("SELECT * FROM games WHERE user_id = ? AND game_id = ?", [sess.user_id,sess.game_id]).fetchall()
+        game = cursor.execute("SELECT * FROM games WHERE user_id = ? AND game_id = ?", [user_id,game_id]).fetchall()
         if len(game) != 0:
             con.close()
             raise HTTPException
@@ -63,11 +63,11 @@ async def new_game(sess:Session, response: Response):
     r = redis.Redis(decode_responses=True)
     unique_id = str(unique_id)
     r.delete(unique_id)
-    r.rpush(unique_id, sess.game_id)
+    r.rpush(unique_id, game_id)
     r.rpush(unique_id, 0)
     response.headers["Location"] = f"/restore_game?unique_id={unique_id}"
     # Modify this to return json format from the project 5 example
-    return {"unique_id": unique_id, "game_id": sess.game_id, "guesses" : 0}
+    return {"unique_id": unique_id, "game_id": game_id}
 
 
 # Input: uniquw_id and new guess word

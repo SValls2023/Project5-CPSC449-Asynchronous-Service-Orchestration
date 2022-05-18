@@ -13,8 +13,7 @@ from fastapi import FastAPI, Depends, Response, HTTPException, status, Request
 from datetime import datetime
 app = FastAPI()
 
-# user_id is the unique_id (byte formar)
-# curr_row is the row_id
+# REPLACE USER_ID WITH UNIQUE_ID not for string tho
 @app.post("/game/new", status_code=status.HTTP_201_CREATED)
 def new_game(username: str):
     with httpx.Client() as client:
@@ -23,43 +22,43 @@ def new_game(username: str):
         cur = con.cursor()
 
         # Creates new id for the new user and commits to the users table
-        user_id = cur.execute("SELECT unique_id FROM users WHERE username = ?", [username]).fetchall()
-        curr_row = cur.execute("SELECT MAX(user_id) FROM users").fetchall()
         try:
+            user_id = cur.execute("SELECT unique_id FROM users WHERE username = ?", [username]).fetchall()
+            curr_row = cur.execute("SELECT MAX(user_id) FROM users").fetchall()
             if len(user_id) == 0:
                 curr_row = curr_row[0][0]; curr_row += 1
                 user_id = uuid4()
-                cur.execute("INSERT INTO users VALUES (?,?)", [curr_row, username, user_id])
+                cur.execute("INSERT INTO users VALUES (?,?,?)", [curr_row, username, user_id.bytes_le])
             else:
                 user_id = user_id[0][0]
                 curr_row = curr_row[0][0]
             con.commit()
             con.close()
         except:
-            con.close()
             raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Unexpected server error"
-            )
-         
-        # Initialize Json game object  
-        # Move status key into tracking microservice      
-        curr = {"username": username, "status": "new", "unique_id":user_id}   
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Unexpected server error"
+             )
+
+        # Initialize Json game object
+        # Move status key into tracking microservice
+        curr = {"username": username, "status": "new", "unique_id":user_id}
         d = datetime.now(); time = f"{d.year}{d.month}{d.day}"
         game_id = int(time)
-        
+
         params = {"user_id": curr_row , "game_id": game_id}
         # Post new game or retrieve game in progress from track
-        r = client.post('http://127.0.0.1:5300/new_game', params=params)
+        #r = client.post('http://127.0.0.1:5300/new', params=params)
+        r = httpx.post("http://127.0.0.1:5300/new_game?user_id={}&game_id={}".format(curr_row,game_id))
         # Update curr json with output of track
         curr.update(dict(r.json()))
-        
+
         # Replace with update game from track
         #data = dict(r.json())
         #if int(data["counter"]) > 0:
         #    curr["status"] = "In-progress"
         #    curr.update(data)
         # Add condition that raises exception when more than 6 guesses is passed
-       
+
         # Try getting restore game data and posting in return statement
     return curr
 
