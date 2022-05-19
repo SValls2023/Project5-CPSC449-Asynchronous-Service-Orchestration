@@ -8,9 +8,13 @@ import asyncio
 import json
 import httpx
 import sqlite3
-from uuid import UUID, uuid4
+import random
+import uuid
 from fastapi import FastAPI, Depends, Response, HTTPException, status, Request
+from pydantic import BaseModel, validator, ValidationError
 from datetime import datetime
+
+
 app = FastAPI()
 
 # REPLACE USER_ID WITH UNIQUE_ID not for string tho
@@ -37,18 +41,60 @@ def new_game(username: str):
     return user
 
 
-async def verify_guess(guess: str, data: dict):
-    async with httpx.AsyncClient() as client:
-        params = {"guess": guess}
-        # /games/{answer_id}
-        r = await client.get(f'http://127.0.0.1:5000/validate-guess', params=params)
-        data.update(dict(r.json()))
+@app.get("/print")
+async def print(user_id:int):
+    sqlite3.register_converter('GUID', lambda b: uuid.UUID(bytes_le=b))
+    sqlite3.register_adapter(uuid.UUID, lambda u: memoryview(u.bytes_le))
+    con = sqlite3.connect("./DB/Shards/user_profiles.db", detect_types=sqlite3.PARSE_DECLTYPES)
+    db = con.cursor()
+    cur = db.execute("SELECT unique_id FROM users where user_id=(?)",[user_id]).fetchone()
+    return cur[0]
 
 
 @app.post("/game/{game_id}")
-async def create_game(game_id: int, user_id: UUID, guess: str):
-    data: dict = {}
-    await asyncio.gather(
-        verify_guess(guess, data)
-    )
-    return data
+#async def guessword(user_id:uuid.UUID,guess: str,game_id: int):
+async def guessword(user_id:uuid.UUID,guess: str,game_id: int,apiResponse: Response):
+    try:
+        jsonresponse = {}
+        #api call to check if word is in dictionary
+        response = httpx.get("http://127.0.0.1:5000/words/{}".format(guess))
+        if(response.status_code ==  status.HTTP_400_BAD_REQUEST):
+            jsonresponse.update({"status":"invalid"})
+            apiResponse.status_code = status.HTTP_400_BAD_REQUEST
+            return jsonresponse
+        #if the guess is a valid word in dcitionary
+        elif (response.status_code == status.HTTP_200_OK):
+            #api call to check the no.of.guesses using track api
+            response = httpx.post("http://127.0.0.1:5300/update_game?user_id={}&input_word={}".format(user_id,guess))
+            #print (response.status_code)
+            #if the guesses are remaining
+            if(response.status_code == status.HTTP_200_OK):
+                jsonresponse.update(response.json())
+                guess_remaining = response.json()["remaining"]
+                answer_id = random.randint(0,200)
+                answer_id = 10
+                #api call to check if guess is correct answer
+                response = httpx.get("http://127.0.0.1:5100/games/{}?guess={}".format(answer_id,guess))
+                if(response.status_code == status.HTTP_200_OK):
+                    if(response.json()["status"] == "incorrect" and (guess_remaining-1)>0):
+                        jsonresponse.update(response.json())
+                    else:
+                        #call stats api and return stats
+                        statsresponse= httpx.get("http://127.0.0.1:5200/stats/games/{}/".format(user_id))
+                        if(response.json()["status"] == "win"):
+                            jsonresponse.update(response.json())
+                            jsonresponse.update(statsresponse.json())
+                        elif(response.json()["status"] == "incorrect" and (guess_remaining-1)<=0):
+                            jsonresponse.update(statsresponse.json())
+                    return jsonresponse
+                else:
+                    raise HTTPException(response.status_code, detail=response.json())
+
+            #if no more guesses are left
+            elif (response.status_code == status.HTTP_400_BAD_REQUEST):
+                jsonresponse.update({"status":"no more guesses allowed"})
+                apiResponse.status_code = status.HTTP_400_BAD_REQUEST
+                return jsonresponse
+                #raise HTTPException(response.status_code, detail=response.json())
+    except httpx.HTTPError as exc:
+        print(f"Error while requesting {exc.request.url!r}.")
