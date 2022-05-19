@@ -17,50 +17,24 @@ app = FastAPI()
 @app.post("/game/new", status_code=status.HTTP_201_CREATED)
 def new_game(username: str):
     with httpx.Client() as client:
-        # Part 1: Check the username from user_profiles db
-        con = sqlite3.connect('./DB/Shards/user_profiles.db')
-        cur = con.cursor()
+        # Creates new users and feteches current user's data
+        user = client.get("http://127.0.0.1:5300/user?username={}".format(username))
+        user = dict(user.json())
 
-        # Creates new id for the new user and commits to the users table
-        try:
-            user_id = cur.execute("SELECT unique_id FROM users WHERE username = ?", [username]).fetchall()
-            curr_row = cur.execute("SELECT MAX(user_id) FROM users").fetchall()
-            if len(user_id) == 0:
-                curr_row = curr_row[0][0]; curr_row += 1
-                user_id = uuid4()
-                cur.execute("INSERT INTO users VALUES (?,?,?)", [curr_row, username, user_id.bytes_le])
-            else:
-                user_id = user_id[0][0]
-                curr_row = curr_row[0][0]
-            con.commit()
-            con.close()
-        except:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Unexpected server error"
-             )
+        # Pass parameters into the track service
+        new_game = client.post("http://127.0.0.1:5300/new_game?user_id={}&game_id={}".format(user["curr_row"],user["game_id"]))
 
-        # Initialize Json game object
-        # Move status key into tracking microservice
-        curr = {"username": username, "status": "new", "unique_id":user_id}
-        d = datetime.now(); time = f"{d.year}{d.month}{d.day}"
-        game_id = int(time)
+        # Retrieve parameters fro current user's game
+        if user["status"] == "in-progress":
+            restore_game = client.post("http://127.0.0.1:5300/restore_game?user_id={}".format(user["curr_row"]))
+            restore_game = dict(restore_game.json())
 
-        params = {"user_id": curr_row , "game_id": game_id}
-        # Post new game or retrieve game in progress from track
-        #r = client.post('http://127.0.0.1:5300/new', params=params)
-        r = httpx.post("http://127.0.0.1:5300/new_game?user_id={}&game_id={}".format(curr_row,game_id))
-        # Update curr json with output of track
-        curr.update(dict(r.json()))
+            curr_game = {"remaining": restore_game["guesses_left"], "guesses": restore_game["guesses"], "letters": {"correct": [], "present": []}}
+            user.update(curr_game)
+        user.update(dict(new_game.json()))
+        user.pop("curr_row")
 
-        # Replace with update game from track
-        #data = dict(r.json())
-        #if int(data["counter"]) > 0:
-        #    curr["status"] = "In-progress"
-        #    curr.update(data)
-        # Add condition that raises exception when more than 6 guesses is passed
-
-        # Try getting restore game data and posting in return statement
-    return curr
+    return user
 
 
 async def verify_guess(guess: str, data: dict):

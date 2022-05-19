@@ -13,10 +13,6 @@ import asyncio
 #import aioredis
 import redis
 
-#class Session(BaseModel):
-#    user_id: int
-#    game_id: int
-
 
 # track_cli = Redis()
 track = FastAPI()
@@ -25,6 +21,39 @@ track = FastAPI()
 #c97f5995-0551-40d4-85e2-4f6313385e44  user_id = 99998  username = donald64
 #e1345bbb-ae9c-42a1-bc7a-273913552f7d  user_id = 99999  username = terrylarry
 #fea11f5d-02b4-4dc9-a0ba-619990486cba  user_id = 100000 username = christina22
+
+
+@track.get("/user", status_code=status.HTTP_200_OK)
+async def user(username:str):
+    con = sqlite3.connect('./DB/Shards/user_profiles.db')
+    cur = con.cursor()
+    status = ""
+    # Creates new id for the new user and commits to the users table
+    try:
+        # Add new users and check for existing users
+        user_id = cur.execute("SELECT unique_id FROM users WHERE username = ?", [username]).fetchall()
+        curr_row = cur.execute("SELECT MAX(user_id) FROM users").fetchall()
+        if len(user_id) == 0:
+            status = "new"
+            curr_row = curr_row[0][0]; curr_row += 1
+            user_id = uuid4(); user_id = user_id.bytes_le
+            cur.execute("INSERT INTO users VALUES (?,?,?)", [curr_row, username, user_id])
+        else:
+            status = "in-progress"
+            user_id = user_id[0][0]
+            curr_row = curr_row[0][0]
+        con.commit()
+        con.close()
+    except:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Unexpected server error"
+            )
+
+    # Initialize Json game object and game_id parameter
+    d = datetime.now(); time = f"{d.year}{d.month}{d.day}"
+    game_id = int(time)
+
+    return {"username": username, "status": status, "user_id": str(user_id), "curr_row": curr_row, "game_id": game_id}
 
 
 # Input: User ID, Game ID
@@ -66,8 +95,8 @@ async def new_game(user_id: int, game_id: int, response: Response):
     r.rpush(unique_id, game_id)
     r.rpush(unique_id, 0)
     response.headers["Location"] = f"/restore_game?unique_id={unique_id}"
-    # Modify this to return json format from the project 5 example
-    return {"unique_id": unique_id, "game_id": game_id}
+
+    return {"user_id": unique_id, "game_id": game_id}
 
 
 # Input: uniquw_id and new guess word
