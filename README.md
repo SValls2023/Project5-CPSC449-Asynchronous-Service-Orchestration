@@ -15,5 +15,7 @@ Create shards: execute create_shards.py in the terminal
 - uvicorn api_dict:app --reload
 - uvicorn api_game:app --reload
 - uvicorn api_stats:app --reload
+- uvicorn api_track:track --reload
+- uvicorn backend_for_frontend:app --reload
 #### Using Procfile:
 foreman start
