@@ -82,7 +82,7 @@ async def new_game(sess: Session, response: Response):
         )
 
     con = sqlite3.connect(f'./DB/Shards/stats{(sess.user_id % 3) + 1}.db')
-    print(f'./DB/Shards/stats{(sess.user_id % 3) + 1}.db')
+    #print(f'./DB/Shards/stats{(sess.user_id % 3) + 1}.db')
     cursor = con.cursor()
     try:
         game = cursor.execute("SELECT * FROM games WHERE user_id = ? AND game_id = ?",
@@ -98,7 +98,7 @@ async def new_game(sess: Session, response: Response):
         )
     r = redis.Redis(decode_responses=True)
     unique_id = str(unique_id)
-    print(unique_id)
+    #print(unique_id)
     r.delete(unique_id)
     r.rpush(unique_id, sess.game_id)
 
@@ -142,8 +142,8 @@ async def update_game(user_id: uuid.UUID, input_word: str, response: Response):
         )
 
     r.rpush(unique_id, input_word)
-    r.lset(unique_id, 1, int(user_guess_info[1]) + 1)
-    #return {"input": guess_word}
+    user_guess_info[1] = int(user_guess_info[1]) + 1
+    r.lset(unique_id, 1, int(user_guess_info[1]))
     return{"remaining": 6 - int(user_guess_info[1])}
 
 
@@ -152,14 +152,16 @@ async def update_game(user_id: uuid.UUID, input_word: str, response: Response):
 @track.post("/restore_game", status_code=status.HTTP_200_OK)
 async def update_game(user_id: int, response: Response):
     # Make sure user exists
-    con = sqlite3.connect('./DB/Shards/user_profiles.db')
+    con = sqlite3.connect('./DB/Shards/user_profiles.db',detect_types=sqlite3.PARSE_DECLTYPES)
+    sqlite3.register_converter('GUID', lambda b: uuid.UUID(bytes_le=b))
+    sqlite3.register_adapter(uuid.UUID, lambda u: memoryview(u.bytes_le))
     cursor = con.cursor()
     try:
-        unique_id = cursor.execute("SELECT unique_id FROM users WHERE user_id = ?",
-                                   [user_id]).fetchone()[0]
-        if len(unique_id) == 0:
+        record = cursor.execute("SELECT unique_id FROM users WHERE user_id = ?",[user_id]).fetchone()
+        if len(record) == 0:
             con.close()
             raise HTTPException
+        unique_id=record[0]
     except:
         con.close()
         raise HTTPException(
@@ -168,7 +170,6 @@ async def update_game(user_id: int, response: Response):
     unique_id = str(unique_id)
     r = redis.Redis(decode_responses=True)
     user_guess_info = r.lrange(unique_id, 0, -1)
-    print(user_guess_info)
     if len(user_guess_info) == 0:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User is not playing any game"
