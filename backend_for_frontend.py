@@ -7,7 +7,6 @@
 import asyncio
 import json
 import httpx
-import sqlite3
 import random
 import uuid
 from fastapi import FastAPI, Depends, Response, HTTPException, status, Request
@@ -41,50 +40,61 @@ def new_game(username: str):
     return user
 
 
-@app.get("/print")
-async def print(user_id:int):
-    sqlite3.register_converter('GUID', lambda b: uuid.UUID(bytes_le=b))
-    sqlite3.register_adapter(uuid.UUID, lambda u: memoryview(u.bytes_le))
-    con = sqlite3.connect("./DB/Shards/user_profiles.db", detect_types=sqlite3.PARSE_DECLTYPES)
-    db = con.cursor()
-    cur = db.execute("SELECT unique_id FROM users where user_id=(?)",[user_id]).fetchone()
-    return cur[0]
 
+async def async_req(url, method='get'):
+    async with httpx.AsyncClient() as client:
+        if method == 'get':
+            r = await client.get(url,timeout=60)
+        else:
+            r = await client.post(url)
+
+    return r
+
+def req(url, method='get'):
+    with httpx.Client() as client:
+        if method == 'get':
+            r = httpx.get(url,timeout=60)
+        else:
+            r = httpx.post(url)
+    return r
 
 @app.post("/game/{game_id}")
-#async def guessword(user_id:uuid.UUID,guess: str,game_id: int):
 async def guessword(user_id:uuid.UUID,guess: str,game_id: int,apiResponse: Response):
     try:
         jsonresponse = {}
+        tasks = []
         #api call to check if word is in dictionary
-        response = httpx.get("http://127.0.0.1:5000/words/{}".format(guess))
-        if(response.status_code ==  status.HTTP_400_BAD_REQUEST):
+        response = req("http://127.0.0.1:5000/words/{}".format(guess))
+        if response.status_code == status.HTTP_400_BAD_REQUEST:
             jsonresponse.update({"status":"invalid"})
             apiResponse.status_code = status.HTTP_400_BAD_REQUEST
             return jsonresponse
         #if the guess is a valid word in dcitionary
-        elif (response.status_code == status.HTTP_200_OK):
+        elif response.status_code == status.HTTP_200_OK:
+            answer_id = random.randint(0,200)
+            answer_id = 10
             #api call to check the no.of.guesses using track api
-            response = httpx.post("http://127.0.0.1:5300/update_game?user_id={}&input_word={}".format(user_id,guess))
-            #print (response.status_code)
+            tasks.append(asyncio.create_task(async_req("http://127.0.0.1:5300/update_game?user_id={}&input_word={}".format(user_id,guess),"post")))
+            #api call to: check if guess is correct answer
+            tasks.append(asyncio.create_task(async_req("http://127.0.0.1:5100/games/{}?guess={}".format(answer_id,guess))))
+            result_responses = await asyncio.gather(*tasks)
+            response = result_responses[0]
             #if the guesses are remaining
             if(response.status_code == status.HTTP_200_OK):
                 jsonresponse.update(response.json())
                 guess_remaining = response.json()["remaining"]
-                answer_id = random.randint(0,200)
-                answer_id = 10
-                #api call to check if guess is correct answer
-                response = httpx.get("http://127.0.0.1:5100/games/{}?guess={}".format(answer_id,guess))
+                response = result_responses[1]
                 if(response.status_code == status.HTTP_200_OK):
-                    if(response.json()["status"] == "incorrect" and (guess_remaining-1)>0):
+                    if(response.json()["status"] == "incorrect" and (guess_remaining)>0):
                         jsonresponse.update(response.json())
                     else:
                         #call stats api and return stats
-                        statsresponse= httpx.get("http://127.0.0.1:5200/stats/games/{}/".format(user_id),timeout=60.0)
+                        statsresponse= req("http://127.0.0.1:5200/stats/games/{}/".format(user_id))
                         if(response.json()["status"] == "win"):
                             jsonresponse.update(response.json())
                             jsonresponse.update(statsresponse.json())
-                        elif(response.json()["status"] == "incorrect" and (guess_remaining-1)<=0):
+                        elif(response.json()["status"] == "incorrect" and guess_remaining==0):
+                            jsonresponse.update({"status":"incorrect"})
                             jsonresponse.update(statsresponse.json())
                     return jsonresponse
                 else:
@@ -97,4 +107,4 @@ async def guessword(user_id:uuid.UUID,guess: str,game_id: int,apiResponse: Respo
                 return jsonresponse
                 #raise HTTPException(response.status_code, detail=response.json())
     except httpx.HTTPError as exc:
-        print(f"Error while requesting {exc.request.url!r}.")
+        return(f"Error while requesting {exc.request.url!r}.")
