@@ -80,7 +80,7 @@ async def guessword(user_id:uuid.UUID,guess: str,game_id: int,apiResponse: Respo
                         jsonresponse.update(response.json())
                     else:
                         #call stats api and return stats
-                        statsresponse= httpx.get("http://127.0.0.1:5200/stats/games/{}/".format(user_id))
+                        statsresponse= httpx.get("http://127.0.0.1:5200/stats/games/{}/".format(user_id),timeout=60.0)
                         if(response.json()["status"] == "win"):
                             jsonresponse.update(response.json())
                             jsonresponse.update(statsresponse.json())
