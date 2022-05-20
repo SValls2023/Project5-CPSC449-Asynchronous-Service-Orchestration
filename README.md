@@ -1,22 +1,25 @@
 # Project5-CPSC449-Asynchronous-Service-Orchestration
 ### Database Initialization
-Go to project directory 
-
+Go to project directory /Project5-CPSC449-Asynchronous-Service-Orchestration-main/bin
+run sh init.sh
 
 #### Using Procfile:
+Go to project directory /Project5-CPSC449-Asynchronous-Service-Orchestration-main
 foreman start
 
 #### Using Services
 Go to the url: 'http://127.0.0.1:5400/docs'
 
-For the first endpoint...
+### For the first endpoint...
 
 Enter a username, Example: 'ProfAvery'
 
-You should be presented with a JSON object that include your username, user_id, and game_id...
+You should be presented with a JSON object that includes your username, unique_id, and game_id
 
-For the second endpoint...
+Enter the same username and the JSON object will show the status of your current game 
 
-Enter UUID that corresponds to the username along with the guess
+### For the second endpoint...
 
-The JSON object will show the status of your current game 
+Enter unique_id and game_id that corresponds to the username along with a guess (Copy these values from the response in the first endpoint)
+
+The JSON object will display your results, indicating the result of your guess
