@@ -29,21 +29,22 @@ async def check_guess(answer_id: int, guess: str, db: sqlite3.Connection = Depen
     looking_for = cur.fetchall()
     if not looking_for:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Id not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Answer Id not found"
         )
     wordle_of_day = looking_for[0][0]
     if guess == wordle_of_day:
-        return {"detail": "Guess is correct!"}
-    color_list = []
+        #return {"detail": "Guess is correct!"}
+        return {"status": "win"}
+    correct=[]
+    present=[]
     for index, letter in enumerate(guess):
-        color = "Gray"
         if wordle_of_day[index] == guess[index]:
-            color = "Green"
+            correct.append(guess[index])
         else:
             if letter in wordle_of_day:
-                color = "Yellow"
-        color_list.append(color)
-    return {"letter colors" : [f"{letter}: {color_list[index]}" for index, letter in enumerate(guess)]}
+                present.append((guess[index]))
+
+    return {"status":"incorrect", "letter": {"correct": correct, "present": present}}
 
 
 @app.put("/games/")
