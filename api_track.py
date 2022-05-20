@@ -32,11 +32,13 @@ track = FastAPI()
 
 @track.get("/user", status_code=status.HTTP_200_OK)
 async def user(username:str):
-    con = sqlite3.connect('./bin/DB/Shards/user_profiles.db')
+    con = sqlite3.connect('./bin/DB/Shards/user_profiles.db',detect_types=sqlite3.PARSE_DECLTYPES)
     sqlite3.register_converter('GUID', lambda b: uuid.UUID(bytes_le=b))
     sqlite3.register_adapter(uuid.UUID, lambda u: memoryview(u.bytes_le))
     cur = con.cursor()
     status = ""
+    mylist = range(1,1000)
+    game_id = 0
     # Creates new id for the new user and commits to the users table
     try:
         # Add new users and check for existing users
@@ -47,18 +49,22 @@ async def user(username:str):
             curr_row = curr_row[0][0]; curr_row += 1
             user_id = uuid4()
             cur.execute("INSERT INTO users VALUES (?,?,?)", [curr_row, username, user_id.bytes_le])
+            game_id = choice(mylist)
         else:
             status = "in-progress"
             user_id = user_id[0][0]
             curr_row = curr_row[0][0]
+            unique_id = str(user_id)
+            r = redis.Redis(decode_responses=True)
+            user_guess_info = r.lrange(unique_id, 0, -1)
+            game_id = user_guess_info[0]
         con.commit()
         con.close()
     except:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Unexpected server error"
             )
-    mylist = range(1,1000)
-    game_id = choice(mylist)
+    
     
     return {"curr_row": curr_row, "game_id": game_id, "status": status}
 
