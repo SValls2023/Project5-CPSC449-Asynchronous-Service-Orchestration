@@ -2,7 +2,7 @@ from codecs import ignore_errors
 from curses.ascii import HT
 from re import S
 import re
-#from uuid import UUID, uuid4
+from uuid import uuid4
 import uuid
 from fastapi import FastAPI, Depends, Response, HTTPException, status
 import sqlite3
@@ -13,11 +13,12 @@ from redis import Redis
 import asyncio
 # import aioredis
 import redis
+from random import choice
 
 
-class Session(BaseModel):
-    user_id: int
-    game_id: int
+#class Session(BaseModel):
+#    user_id: int
+#    game_id: int
 
 
 # track_cli = Redis()
@@ -31,7 +32,9 @@ track = FastAPI()
 
 @track.get("/user", status_code=status.HTTP_200_OK)
 async def user(username:str):
-    con = sqlite3.connect('./DB/Shards/user_profiles.db')
+    con = sqlite3.connect('./bin/DB/Shards/user_profiles.db')
+    sqlite3.register_converter('GUID', lambda b: uuid.UUID(bytes_le=b))
+    sqlite3.register_adapter(uuid.UUID, lambda u: memoryview(u.bytes_le))
     cur = con.cursor()
     status = ""
     # Creates new id for the new user and commits to the users table
@@ -42,8 +45,8 @@ async def user(username:str):
         if len(user_id) == 0:
             status = "new"
             curr_row = curr_row[0][0]; curr_row += 1
-            user_id = uuid4(); user_id = user_id.bytes_le
-            cur.execute("INSERT INTO users VALUES (?,?,?)", [curr_row, username, user_id])
+            user_id = uuid4()
+            cur.execute("INSERT INTO users VALUES (?,?,?)", [curr_row, username, user_id.bytes_le])
         else:
             status = "in-progress"
             user_id = user_id[0][0]
@@ -54,21 +57,25 @@ async def user(username:str):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Unexpected server error"
             )
+    mylist = range(1,1000)
+    game_id = choice(mylist)
+    
+    return {"curr_row": curr_row, "game_id": game_id, "status": status}
 
 # Input: User ID, Game ID
 # Output: Indicate a succesful response, or an error as the user already exists
 @track.post("/new_game", status_code=status.HTTP_201_CREATED)
-async def new_game(sess: Session, response: Response):
+async def new_game(user_id: int, game_id: int, response: Response):
     # Make sure user exists
     # TO DO: Correct hashing scheme for shards
-    con = sqlite3.connect('./DB/Shards/user_profiles.db',detect_types=sqlite3.PARSE_DECLTYPES)
+    con = sqlite3.connect('./bin/DB/Shards/user_profiles.db',detect_types=sqlite3.PARSE_DECLTYPES)
     sqlite3.register_converter('GUID', lambda b: uuid.UUID(bytes_le=b))
     sqlite3.register_adapter(uuid.UUID, lambda u: memoryview(u.bytes_le))
     cursor = con.cursor()
     try:
 
         record = cursor.execute("SELECT unique_id FROM users WHERE user_id = ?",
-                                   [sess.user_id]).fetchone()
+                                   [user_id]).fetchone()
         #print(type(unique_id))
         if len(record) == 0:
             con.close()
@@ -81,12 +88,12 @@ async def new_game(sess: Session, response: Response):
             status_code=status.HTTP_404_NOT_FOUND, detail="Invalid user"
         )
 
-    con = sqlite3.connect(f'./DB/Shards/stats{(sess.user_id % 3) + 1}.db')
+    con = sqlite3.connect(f'./bin/DB/Shards/stats{(user_id % 3) + 1}.db')
     #print(f'./DB/Shards/stats{(sess.user_id % 3) + 1}.db')
     cursor = con.cursor()
     try:
         game = cursor.execute("SELECT * FROM games WHERE user_id = ? AND game_id = ?",
-                              [sess.user_id, sess.game_id]).fetchall()
+                              [user_id, game_id]).fetchall()
         if len(game) != 0:
             con.close()
             raise HTTPException
@@ -100,12 +107,12 @@ async def new_game(sess: Session, response: Response):
     unique_id = str(unique_id)
     #print(unique_id)
     r.delete(unique_id)
-    r.rpush(unique_id, sess.game_id)
+    r.rpush(unique_id, game_id)
 
     r.rpush(unique_id, 0)
     response.headers["Location"] = f"/restore_game?unique_id={unique_id}"
     # Modify this to return json format from the project 5 example
-    return {"unique_id": unique_id, "game_id": sess.game_id, "guesses": 0}
+    return {"unique_id": unique_id, "game_id": game_id, "guesses": 0}
 
 
 # Input: uniquw_id and new guess word
@@ -119,7 +126,7 @@ async def update_game(user_id: uuid.UUID, input_word: str, response: Response):
     sqlite3.register_converter('GUID', lambda b: uuid.UUID(bytes_le=b))
     #python type to sql
     sqlite3.register_adapter(uuid.UUID, lambda u: memoryview(u.bytes_le))
-    con = sqlite3.connect('./DB/Shards/user_profiles.db',detect_types=sqlite3.PARSE_DECLTYPES)
+    con = sqlite3.connect('./bin/DB/Shards/user_profiles.db',detect_types=sqlite3.PARSE_DECLTYPES)
     cursor = con.cursor()
     try:
         record = cursor.execute("SELECT unique_id FROM users WHERE unique_id = ?",[user_id]).fetchone()
@@ -152,7 +159,7 @@ async def update_game(user_id: uuid.UUID, input_word: str, response: Response):
 @track.post("/restore_game", status_code=status.HTTP_200_OK)
 async def update_game(user_id: int, response: Response):
     # Make sure user exists
-    con = sqlite3.connect('./DB/Shards/user_profiles.db',detect_types=sqlite3.PARSE_DECLTYPES)
+    con = sqlite3.connect('./bin/DB/Shards/user_profiles.db',detect_types=sqlite3.PARSE_DECLTYPES)
     sqlite3.register_converter('GUID', lambda b: uuid.UUID(bytes_le=b))
     sqlite3.register_adapter(uuid.UUID, lambda u: memoryview(u.bytes_le))
     cursor = con.cursor()
@@ -180,4 +187,5 @@ async def update_game(user_id: int, response: Response):
             guess_dict.update({i - 1: user_guess_info[i]})
         except IndexError:
             break
+    6 - int(user_guess_info[1])
     return {"current_game_id": user_guess_info[0], "guesses_left": 6 - int(user_guess_info[1]), "guesses": guess_dict}

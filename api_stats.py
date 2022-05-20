@@ -39,7 +39,7 @@ class Result(BaseModel):
 
 def get_db():
     """Connect words.db"""
-    with contextlib.closing(sqlite3.connect("DB/stats.db", check_same_thread=False)) as db:
+    with contextlib.closing(sqlite3.connect("bin/DB/stats.db", check_same_thread=False)) as db:
         db.row_factory = sqlite3.Row
         yield db
 
@@ -54,16 +54,16 @@ async def add_game_played(game_id: int, unique_id: uuid.UUID, result: Result):
     sqlite3.register_converter('GUID', lambda b: uuid.UUID(bytes_le=b))
     sqlite3.register_adapter(uuid.UUID, lambda u: memoryview(u.bytes_le))
     if (int(unique_id) % 3 == 0):
-        con = sqlite3.connect("DB/Shards/stats1.db", detect_types=sqlite3.PARSE_DECLTYPES)
+        con = sqlite3.connect("bin/DB/Shards/stats1.db", detect_types=sqlite3.PARSE_DECLTYPES)
         db = con.cursor()
     elif (int(unique_id) % 3 == 1):
-        con = sqlite3.connect("DB/Shards/stats2.db", detect_types=sqlite3.PARSE_DECLTYPES)
+        con = sqlite3.connect("bin/DB/Shards/stats2.db", detect_types=sqlite3.PARSE_DECLTYPES)
         db = con.cursor()
     else:
-        con = sqlite3.connect("DB/Shards/stats3.db", detect_types=sqlite3.PARSE_DECLTYPES)
+        con = sqlite3.connect("bin/DB/Shards/stats3.db", detect_types=sqlite3.PARSE_DECLTYPES)
         db = con.cursor()
 
-    db.execute("ATTACH DATABASE 'DB/Shards/user_profiles.db' As 'up'")
+    db.execute("ATTACH DATABASE 'bin/DB/Shards/user_profiles.db' As 'up'")
 
     cur = db.execute("SELECT user_id FROM up.users WHERE unique_id = ?", [unique_id])
     looking_for = cur.fetchall()
@@ -90,16 +90,16 @@ async def retrieve_player_stats(unique_id: uuid.UUID):
     sqlite3.register_converter('GUID', lambda b: uuid.UUID(bytes_le=b))
     sqlite3.register_adapter(uuid.UUID, lambda u: memoryview(u.bytes_le))
     if (int(unique_id) % 3 == 0):
-        con = sqlite3.connect("DB/Shards/stats1.db", detect_types=sqlite3.PARSE_DECLTYPES)
+        con = sqlite3.connect("bin/DB/Shards/stats1.db", detect_types=sqlite3.PARSE_DECLTYPES)
         db = con.cursor()
     elif (int(unique_id) % 3 == 1):
-        con = sqlite3.connect("DB/Shards/stats2.db", detect_types=sqlite3.PARSE_DECLTYPES)
+        con = sqlite3.connect("bin/DB/Shards/stats2.db", detect_types=sqlite3.PARSE_DECLTYPES)
         db = con.cursor()
     else:
-        con = sqlite3.connect("DB/Shards/stats3.db", detect_types=sqlite3.PARSE_DECLTYPES)
+        con = sqlite3.connect("bin/DB/Shards/stats3.db", detect_types=sqlite3.PARSE_DECLTYPES)
         db = con.cursor()
 
-    db.execute("ATTACH DATABASE 'DB/Shards/user_profiles.db' As 'up'")
+    db.execute("ATTACH DATABASE 'bin/DB/Shards/user_profiles.db' As 'up'")
 
     cur = db.execute("SELECT unique_id FROM up.users WHERE unique_id = ?", [unique_id])
     looking_for = cur.fetchall()

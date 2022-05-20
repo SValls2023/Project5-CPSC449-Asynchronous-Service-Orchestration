@@ -16,7 +16,7 @@ class Game(BaseModel):
 
 def get_db():
     """Gets database handle"""
-    with contextlib.closing(sqlite3.connect("DB/answers.db", check_same_thread=False)) as db:
+    with contextlib.closing(sqlite3.connect("bin/DB/answers.db", check_same_thread=False)) as db:
         db.row_factory = sqlite3.Row
         yield db
 

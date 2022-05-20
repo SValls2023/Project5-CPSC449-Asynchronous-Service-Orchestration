@@ -9,7 +9,7 @@ from fastapi import FastAPI, Depends, HTTPException, status
 
 def get_db():
     """Connect words.db"""
-    with contextlib.closing(sqlite3.connect("DB/words.db", check_same_thread=False)) as db:
+    with contextlib.closing(sqlite3.connect("bin/DB/words.db", check_same_thread=False)) as db:
         db.row_factory = sqlite3.Row
         yield db
 
