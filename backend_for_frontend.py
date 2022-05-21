@@ -72,7 +72,6 @@ async def guessword(user_id:uuid.UUID,guess: str,game_id: int,apiResponse: Respo
         #if the guess is a valid word in dcitionary
         elif response.status_code == status.HTTP_200_OK:
             answer_id = random.randint(0,200)
-            answer_id = 10
             #api call to check the no.of.guesses using track api
             tasks.append(asyncio.create_task(async_req("http://127.0.0.1:5300/update_game?user_id={}&input_word={}".format(user_id,guess),"post")))
             #api call to: check if guess is correct answer
