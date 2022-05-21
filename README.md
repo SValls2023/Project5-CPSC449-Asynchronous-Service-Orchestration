@@ -1,4 +1,11 @@
 # Project5-CPSC449-Asynchronous-Service-Orchestration
+
+### Team Members:
+Cesar Martinez Melgoza
+Andy Cao
+Anitha Chockalingam
+Samuel Valls
+
 ### Database Initialization
 Go to project directory /Project5-CPSC449-Asynchronous-Service-Orchestration-main/bin
 run sh init.sh
