@@ -57,6 +57,13 @@ async def user(username:str):
             unique_id = str(user_id)
             r = redis.Redis(decode_responses=True)
             user_guess_info = r.lrange(unique_id, 0, -1)
+            if len(user_guess_info) == 0:
+                mylist = range(1,1000)
+                game_id = choice(mylist)
+                r.rpush(unique_id, game_id)
+                r.rpush(unique_id, 0)
+                user_guess_info = r.lrange(unique_id, 0, -1)
+                status = "new"
             game_id = user_guess_info[0]
         con.commit()
         con.close()
